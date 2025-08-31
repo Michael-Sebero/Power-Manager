@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+
+BAT_PATH="/sys/class/power_supply/BAT0"
+AC_PATH="/sys/class/power_supply/AC"
+PIDFILE="/var/run/power-manager.pid"
+
+STATE="default_mode"
+
+# Write PID file
+echo $$ > "$PIDFILE"
+
+# Cleanup function
+cleanup() {
+    echo "[battery-performance] Shutting down gracefully..."
+    rm -f "$PIDFILE"
+    exit 0
+}
+
+# Trap signals for graceful shutdown
+trap cleanup TERM INT QUIT HUP
+
+# Load defaults from /etc/sysctl.conf into an associative array
+declare -A DEFAULTS
+while IFS='= ' read -r key val; do
+    [[ -n "$key" && "$key" != \#* ]] && DEFAULTS["$key"]="$val"
+done < /etc/sysctl.conf
+
+# Function: Apply Performance Settings
+apply_performance_mode() {
+    echo "[battery-performance] Applying PERFORMANCE sysctl values..."
+    
+    sudo sysctl -w net.core.rmem_max=16777216 >/dev/null 2>&1
+    sudo sysctl -w net.core.wmem_max=16777216 >/dev/null 2>&1
+    sudo sysctl -w net.ipv4.tcp_rmem="4096 87380 16777216" >/dev/null 2>&1
+    sudo sysctl -w net.ipv4.tcp_wmem="4096 87380 16777216" >/dev/null 2>&1
+    sudo sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1
+    sudo sysctl -w kernel.randomize_va_space=1 >/dev/null 2>&1
+    sudo sysctl -w vm.vfs_cache_pressure=50 >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_bytes=536870912 >/dev/null 2>&1
+    sudo sysctl -w vm.laptop_mode=0 >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_expire_centisecs=5000 >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_writeback_centisecs=1000 >/dev/null 2>&1
+    sudo sysctl -w vm.page-cluster=5 >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_ratio=30 >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_background_ratio=12 >/dev/null 2>&1
+    sudo sysctl -w vm.min_free_kbytes=262144 >/dev/null 2>&1
+    sudo sysctl -w vm.compaction_proactiveness=80 >/dev/null 2>&1
+    sudo sysctl -w vm.watermark_boost_factor=15000 >/dev/null 2>&1
+    sudo sysctl -w vm.max_map_count=134217728 >/dev/null 2>&1
+    sudo sysctl -w vm.admin_reserve_kbytes=524288 >/dev/null 2>&1
+    sudo sysctl -w vm.stat_interval=1 >/dev/null 2>&1
+    sudo sysctl -w kernel.sched_autogroup_enabled=1 >/dev/null 2>&1
+    sudo sysctl -w kernel.timer_migration=0 >/dev/null 2>&1
+    sudo sysctl -w kernel.sched_rt_runtime_us=990000 >/dev/null 2>&1
+    sudo sysctl -w kernel.shmmax=17179869184 >/dev/null 2>&1
+    sudo sysctl -w kernel.shmall=4194304 >/dev/null 2>&1
+    sudo sysctl -w kernel.sched_bore=1 >/dev/null 2>&1
+
+    STATE="performance_mode"
+}
+
+# Function: Apply Power Saving Settings
+apply_power_save_mode() {
+    echo "[battery-performance] Applying POWER SAVING sysctl values..."
+
+    sudo sysctl -w net.core.rmem_max=1048576 >/dev/null 2>&1
+    sudo sysctl -w net.core.wmem_max=1048576 >/dev/null 2>&1
+    sudo sysctl -w net.ipv4.tcp_rmem="4096 32768 1048576" >/dev/null 2>&1
+    sudo sysctl -w net.ipv4.tcp_wmem="4096 32768 1048576" >/dev/null 2>&1
+    sudo sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_expire_centisecs=6000 >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_writeback_centisecs=6000 >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_ratio=15 >/dev/null 2>&1
+    sudo sysctl -w vm.dirty_background_ratio=10 >/dev/null 2>&1
+    sudo sysctl -w vm.min_free_kbytes=65536 >/dev/null 2>&1
+    sudo sysctl -w vm.extfrag_threshold=500 >/dev/null 2>&1
+    sudo sysctl -w vm.compaction_proactiveness=20 >/dev/null 2>&1
+    sudo sysctl -w vm.watermark_boost_factor=0 >/dev/null 2>&1
+    sudo sysctl -w vm.watermark_scale_factor=10 >/dev/null 2>&1
+    sudo sysctl -w vm.max_map_count=1048576 >/dev/null 2>&1
+    sudo sysctl -w vm.admin_reserve_kbytes=131072 >/dev/null 2>&1
+    sudo sysctl -w vm.stat_interval=120 >/dev/null 2>&1
+    sudo sysctl -w kernel.sched_autogroup_enabled=1 >/dev/null 2>&1
+
+    STATE="power_save_mode"
+}
+
+# Function: Restore Defaults
+apply_default_mode() {
+    echo "[battery-performance] Restoring DEFAULT sysctl values..."
+    for key in "${!DEFAULTS[@]}"; do
+        sudo sysctl -w "$key=${DEFAULTS[$key]}" >/dev/null 2>&1
+    done
+    STATE="default_mode"
+}
+
+# Check if system is shutting down
+is_shutting_down() {
+    # Check for common shutdown/reboot processes
+    pgrep -x "shutdown\|halt\|reboot\|poweroff" >/dev/null 2>&1 && return 0
+    # Check runlevel (if available)
+    if command -v runlevel >/dev/null 2>&1; then
+        local current_runlevel=$(runlevel 2>/dev/null | cut -d' ' -f2)
+        [[ "$current_runlevel" == "0" || "$current_runlevel" == "6" ]] && return 0
+    fi
+    # Check if /proc/1/comm is init and if shutdown is happening
+    [[ ! -r /proc/1/comm ]] && return 0
+    return 1
+}
+
+# Monitoring Loop
+while true; do
+    # Exit gracefully if system is shutting down
+    if is_shutting_down; then
+        cleanup
+    fi
+    
+    # Check if battery and AC paths exist
+    if [[ -d "$BAT_PATH" && -d "$AC_PATH" ]]; then
+        # Use timeout to prevent hanging reads
+        CAPACITY=$(timeout 5 cat "$BAT_PATH/capacity" 2>/dev/null || echo "50")
+        STATUS=$(timeout 5 cat "$AC_PATH/online" 2>/dev/null || echo "1")
+        
+        # Validate readings
+        if [[ ! "$CAPACITY" =~ ^[0-9]+$ ]]; then
+            CAPACITY=50
+        fi
+        if [[ ! "$STATUS" =~ ^[01]$ ]]; then
+            STATUS=1
+        fi
+
+        # Priority order: Power Save (10%) > Performance (AC + 85+) > Default
+        if [[ "$CAPACITY" -le 10 && "$STATE" != "power_save_mode" ]]; then
+            apply_power_save_mode
+        elif [[ "$STATUS" == "1" && "$CAPACITY" -ge 85 && "$STATE" != "performance_mode" && "$CAPACITY" -gt 10 ]]; then
+            apply_performance_mode
+        elif [[ ("$STATUS" == "0" || "$CAPACITY" -lt 85) && "$CAPACITY" -gt 10 && "$STATE" != "default_mode" ]]; then
+            apply_default_mode
+        fi
+    fi
+    
+    # Sleep with ability to be interrupted
+    sleep 30 &
+    wait $!
+done
