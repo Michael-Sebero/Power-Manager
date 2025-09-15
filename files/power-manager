@@ -35,9 +35,6 @@ apply_performance_mode() {
     sudo sysctl -w net.ipv4.tcp_wmem="4096 87380 16777216" >/dev/null 2>&1
     sudo sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1
     sudo sysctl -w kernel.randomize_va_space=1 >/dev/null 2>&1
-    sudo sysctl -w kernel.pid_max=262144 >/dev/null 2>&1
-    sudo sysctl -w fs.file-max=134217728 >/dev/null 2>&1
-    sudo sysctl -w fs.inotify.max_user_watches=134217728 >/dev/null 2>&1
     sudo sysctl -w vm.vfs_cache_pressure=50 >/dev/null 2>&1
     sudo sysctl -w vm.dirty_background_bytes=268435456 >/dev/null 2>&1
     sudo sysctl -w vm.dirty_bytes=536870912 >/dev/null 2>&1
@@ -72,9 +69,6 @@ apply_power_save_mode() {
     sudo sysctl -w net.ipv4.tcp_rmem="4096 16384 524288" >/dev/null 2>&1
     sudo sysctl -w net.ipv4.tcp_wmem="4096 16384 524288" >/dev/null 2>&1
     sudo sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null 2>&1
-    sudo sysctl -w kernel.pid_max=65536 >/dev/null 2>&1
-    sudo sysctl -w fs.file-max=2097152 >/dev/null 2>&1
-    sudo sysctl -w fs.inotify.max_user_watches=524288 >/dev/null 2>&1
     sudo sysctl -w vm.vfs_cache_pressure=75 >/dev/null 2>&1
     sudo sysctl -w vm.dirty_background_bytes=67108864 >/dev/null 2>&1
     sudo sysctl -w vm.laptop_mode=2 >/dev/null 2>&1
