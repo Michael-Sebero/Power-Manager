@@ -2,7 +2,7 @@
 
 BAT_PATH="/sys/class/power_supply/BAT0"
 AC_PATH="/sys/class/power_supply/AC"
-PIDFILE="/var/run/power-manager.pid"
+PIDFILE="/var/run/system-tuner.pid"
 
 STATE="default_mode"
 
