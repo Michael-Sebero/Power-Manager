@@ -1,18 +1,18 @@
 ## How to Install
-. Place `power-manager` in `/bin`
+. Place `system-tuner` in `/bin`
 
 . Make the program executable
 
 ```
-sudo chmod +x /bin/power-manager
+sudo chmod +x /bin/system-tuner
 ```
 
 . Add this section to `rc.local`
 
 ```
 # POWER MANAGER
-if [ -x /bin/power-manager ]; then
-    ( sleep 20; setsid nohup /bin/power-manager >> /var/log/power-manager 2>&1 ) &
+if [ -x /bin/system-tuner ]; then
+    ( sleep 20; setsid nohup /bin/system-tuner >> /var/log/system-tuner 2>&1 ) &
 fi
 ```
 
