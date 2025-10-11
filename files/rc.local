@@ -3,7 +3,7 @@
 # Enter custom commands here. By default, they will be executed on startup in parallel with the other services.
 
 # POWER MANAGER
-if [ -x /bin/power-manager ]; then
-    ( sleep 20; setsid nohup /bin/power-manager >> /var/log/power-manager.log 2>&1 ) &
+if [ -x /bin/system-tuner ]; then
+    ( sleep 20; setsid nohup /bin/system-tuner >> /var/log/system-tuner.log 2>&1 ) &
 fi
 
